@@ -3,8 +3,8 @@ require 'spec_helper'
 
 describe Transactional do
   let(:filesystem_root) { File.join(SPEC_HOME, "test_filesystem") }
-  let(:testfile_name)   { "testfile" }
-  let(:testfile_path)   { File.join(filesystem_root, testfile_name) }
+  let(:testfile_rpath)  { "testfile" }
+  let(:testfile_path)   { File.join(filesystem_root, testfile_rpath) }
 
   before do
     if File.directory? filesystem_root
@@ -24,7 +24,7 @@ describe Transactional do
     context "when the transaction is sucessful" do
       it "creates a new file" do
         start_transaction do |filesystem, transaction|
-          filesystem.write_file testfile_name
+          filesystem.write_file testfile_rpath
           File.exists?(testfile_path).should be_true
         end
         File.exists?(testfile_path).should be_true
@@ -34,7 +34,7 @@ describe Transactional do
       it "overwrites an existing file" do
         File.open(testfile_path, "w") {|f| f.print "hello world"}
         start_transaction do |filesystem, transaction|
-          filesystem.write_file(testfile_name) do |f|
+          filesystem.write_file(testfile_rpath) do |f|
             f.print "goodbye world"
           end
         end
@@ -45,7 +45,7 @@ describe Transactional do
     context "when the transaction fails" do
       it "it deletes a newly created file" do
         start_transaction do |filesystem, transaction|
-          filesystem.write_file testfile_name
+          filesystem.write_file testfile_rpath
 
           File.exists?(testfile_path).should be_true
           File.read(testfile_path).should == ""
@@ -58,7 +58,7 @@ describe Transactional do
       it "rolls and existing file back to its original data" do
         File.open(testfile_path, "w") {|f| f.print "hello world"}
         start_transaction do |filesystem, transaction|
-          filesystem.write_file(testfile_name) do |f|
+          filesystem.write_file(testfile_rpath) do |f|
             f.print "goodbye world"
           end
           transaction.rollback
@@ -102,19 +102,19 @@ describe Transactional do
     end
 
     it "writes a file" do
-      @filesystem.write_file testfile_name
+      @filesystem.write_file testfile_rpath
       File.exists?(testfile_path).should be_true
     end
 
     it "rolls back a file" do
-      @filesystem.write_file testfile_name
+      @filesystem.write_file testfile_rpath
       @filesystem.rollback
       File.exists?(testfile_path).should be_false
     end
   end
 
   describe Transactional::TFile do
-    let(:file) {Transactional::TFile.load(filesystem_root, testfile_name)}
+    let(:file) {Transactional::TFile.load(filesystem_root, testfile_rpath)}
 
     it "writes data to a file" do
       file.write {|f| f.print "data"}
