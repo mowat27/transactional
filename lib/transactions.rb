@@ -6,17 +6,12 @@ module Transactional
     end
 
     def write_file(rpath)
-      with_tfile(rpath) {|tfile| tfile.write {|f| yield f if block_given?}}
+      @tfiles << TFile.load(@root, rpath)
+      @tfiles.last.write {|f| yield f if block_given?}
     end
 
     def rollback
       @tfiles.each {|tfile| tfile.rollback}
-    end
-
-    private
-    def with_tfile(rpath)
-      @tfiles << TFile.load(@root, rpath)
-      yield @tfiles.last
     end
   end
 
