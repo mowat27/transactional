@@ -41,6 +41,34 @@ describe Transactional do
     end
   end
 
+  describe Transactional::Transaction do
+    let(:filesystem1) { mock("filesystem") }
+    let(:filesystem2) { mock("filesystem 2") }
+    let(:transaction) { Transactional::Transaction.new }
+
+    before do
+      Transactional::FileSystem.stub(:new).and_return(filesystem1, filesystem2)
+    end
+
+    context "with a single filesystem" do
+      it "rolls back the filesystem" do
+        fs = transaction.create_filesystem(filesystem_root)
+        fs.should_receive(:rollback)
+        transaction.rollback
+      end
+    end
+
+    context "with many filesystems" do
+      it "rolls back all filesystems" do
+        fs1 = transaction.create_filesystem(filesystem_root)
+        fs2 = transaction.create_filesystem(filesystem_root)
+        fs1.should_receive(:rollback)
+        fs2.should_receive(:rollback)
+        transaction.rollback
+      end
+    end
+  end
+
   describe Transactional::FileSystem do
     before do
       @filesystem = Transactional::FileSystem.new(filesystem_root)

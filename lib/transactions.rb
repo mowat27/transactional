@@ -16,12 +16,18 @@ module Transactional
   end
 
   class Transaction
+    def initialize
+      @filesystems = []
+    end
+
     def rollback
-      @filesystem.rollback if @filesystem
+      @filesystems.each {|filesystem| filesystem.rollback}
     end
 
     def create_filesystem(filesystem_root)
-      @filesystem = FileSystem.new(filesystem_root)
+      result = FileSystem.new(filesystem_root)
+      @filesystems << result
+      result
     end
   end
 
