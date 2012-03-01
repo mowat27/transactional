@@ -28,8 +28,4 @@ module Transactional
   def self.start_transaction
     yield Transaction.new
   end
-
-  def self.create_filesystem(filesystem_root, transaction = nil)
-    FileSystem.new(filesystem_root, transaction)
-  end
 end
