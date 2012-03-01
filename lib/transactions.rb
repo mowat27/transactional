@@ -5,18 +5,18 @@ module Transactional
       @tfiles = []
     end
 
-    def touch(rpath)
-      @tfiles << TFile.load(@root, rpath)
-      @tfiles.last.write {|f|}
-    end
-
     def write_file(rpath)
-      @tfiles << TFile.load(@root, rpath)
-      @tfiles.last.write {|f| yield f}
+      with_tfile(rpath) {|tfile| tfile.write {|f| yield f if block_given?}}
     end
 
     def rollback
       @tfiles.each {|tfile| tfile.rollback}
+    end
+
+    private
+    def with_tfile(rpath)
+      @tfiles << TFile.load(@root, rpath)
+      yield @tfiles.last
     end
   end
 
@@ -65,7 +65,7 @@ module Transactional
       @filesystems.each {|filesystem| filesystem.rollback}
     end
 
-    def touchsystem(filesystem_root)
+    def create_file_system(filesystem_root)
       result = FileSystem.new(filesystem_root)
       @filesystems << result
       result
