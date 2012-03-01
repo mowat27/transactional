@@ -2,16 +2,57 @@ module Transactional
   class FileSystem
     def initialize(root)
       @root = root
+      @tfiles = []
     end
 
-    def create_file(rpath)
-      target = File.join(@root, rpath)
-      File.open(target, "w") {}
-      @file_created = target
+    def touch(rpath)
+      @tfiles << TFile.load(@root, rpath)
+      @tfiles.last.write {|f|}
+    end
+
+    def write_file(rpath)
+      @tfiles << TFile.load(@root, rpath)
+      @tfiles.last.write {|f| yield f}
     end
 
     def rollback
-      FileUtils.rm @file_created
+      @tfiles.each {|tfile| tfile.rollback}
+    end
+  end
+
+  class TFile
+    def self.load(root, rpath)
+      target = File.join(root, rpath)
+      if File.exists? target
+        ExistingTFile.new(target)
+      else
+        NewTFile.new(target)
+      end
+    end
+
+    def initialize(path)
+      @path = path
+    end
+
+    def write
+      File.open(@path, "w") {|f| yield f}
+    end
+  end
+
+  class NewTFile < TFile
+    def rollback
+      FileUtils.rm @path
+    end
+  end
+
+  class ExistingTFile < TFile
+    def initialize(path)
+      super
+      @original_data = File.read(@path)
+    end
+
+    def rollback
+      write {|f| f.print @original_data}
     end
   end
 
@@ -24,7 +65,7 @@ module Transactional
       @filesystems.each {|filesystem| filesystem.rollback}
     end
 
-    def create_filesystem(filesystem_root)
+    def touchsystem(filesystem_root)
       result = FileSystem.new(filesystem_root)
       @filesystems << result
       result
