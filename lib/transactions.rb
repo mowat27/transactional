@@ -25,10 +25,12 @@ module Transactional
       end
     end
 
+    private
     def initialize(path)
       @path = path
     end
 
+    public
     def write
       File.open(@path, "w") {|f| yield f}
     end
@@ -36,7 +38,7 @@ module Transactional
 
   class NewTFile < TFile
     def rollback
-      FileUtils.rm @path
+      FileUtils.rm @path if File.exists? @path
     end
   end
 

@@ -6,6 +6,13 @@ describe Transactional do
   let(:testfile_name)   { "testfile" }
   let(:testfile_path)   { File.join(filesystem_root, testfile_name) }
 
+  before do
+    if File.directory? filesystem_root
+      FileUtils.rm_rf filesystem_root
+    end
+    FileUtils.mkdir filesystem_root
+  end
+
   def start_transaction
     Transactional::start_transaction do |transaction|
       filesystem = transaction.create_file_system(filesystem_root)
@@ -14,13 +21,6 @@ describe Transactional do
   end
 
   describe "writing a file inside a transaction" do
-    before do
-      if File.directory? filesystem_root
-        FileUtils.rm_rf filesystem_root
-      end
-      FileUtils.mkdir filesystem_root
-    end
-
     context "when the transaction is sucessful" do
       it "creates a new file" do
         start_transaction do |filesystem, transaction|
@@ -102,8 +102,49 @@ describe Transactional do
     end
 
     it "writes a file" do
-      File.should_receive(:open).with(testfile_path, "w")
       @filesystem.write_file testfile_name
+      File.exists?(testfile_path).should be_true
+    end
+
+    it "rolls back a file" do
+      @filesystem.write_file testfile_name
+      @filesystem.rollback
+      File.exists?(testfile_path).should be_false
+    end
+  end
+
+  describe Transactional::TFile do
+    let(:file) {Transactional::TFile.load(filesystem_root, testfile_name)}
+
+    it "writes data to a file" do
+      file.write {|f| f.print "data"}
+      File.read(testfile_path).should == "data"
+    end
+
+    context "when the file does not previously exist" do
+      it "deletes updates when rolled back" do
+        file.write {|f| f.puts "data"}
+        file.rollback
+        File.exists?(testfile_path).should be_false
+      end
+
+      it "does nothing on rollback when no updates have been made" do
+        file.rollback
+        File.exists?(testfile_path).should be_false
+      end
+    end
+
+    context "when the file previously exists" do
+      before do
+        File.open(testfile_path, "w") {|f| f.print "original data"}
+      end
+
+      it "reverts to the original content of the file when rolled back" do
+        file.write {|f| f.puts "new data"}
+        file.rollback
+        File.read(testfile_path).should == "original data"
+      end
     end
   end
 end
+
