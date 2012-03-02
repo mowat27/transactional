@@ -7,7 +7,7 @@ module Transactional
 
     def write_file(rpath)
       @tfiles << TFile.load(@root, rpath)
-      @tfiles.last.write {|f| yield f if block_given?}
+      @tfiles.last.open {|f| yield f if block_given?}
     end
 
     def rollback
@@ -31,7 +31,7 @@ module Transactional
     end
 
     public
-    def write
+    def open
       File.open(@path, "w") {|f| yield f}
     end
   end
@@ -49,7 +49,7 @@ module Transactional
     end
 
     def rollback
-      write {|f| f.print @original_data}
+      open {|f| f.print @original_data}
     end
   end
 

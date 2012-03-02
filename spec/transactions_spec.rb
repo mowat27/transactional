@@ -117,13 +117,13 @@ describe Transactional do
     let(:file) {Transactional::TFile.load(filesystem_root, testfile_rpath)}
 
     it "writes data to a file" do
-      file.write {|f| f.print "data"}
+      file.open {|f| f.print "data"}
       File.read(testfile_path).should == "data"
     end
 
     context "when the file does not previously exist" do
       it "deletes updates when rolled back" do
-        file.write {|f| f.puts "data"}
+        file.open {|f| f.puts "data"}
         file.rollback
         File.exists?(testfile_path).should be_false
       end
@@ -140,7 +140,7 @@ describe Transactional do
       end
 
       it "reverts to the original content of the file when rolled back" do
-        file.write {|f| f.puts "new data"}
+        file.open {|f| f.puts "new data"}
         file.rollback
         File.read(testfile_path).should == "original data"
       end
