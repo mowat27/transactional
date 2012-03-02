@@ -5,7 +5,7 @@ module Transactional
       @tfiles = []
     end
 
-    def write_file(rpath)
+    def open(rpath)
       @tfiles << TFile.load(@root, rpath)
       @tfiles.last.open {|f| yield f if block_given?}
     end
@@ -31,8 +31,8 @@ module Transactional
     end
 
     public
-    def open
-      File.open(@path, "w") {|f| yield f}
+    def open(opts = {mode: "w"}, &block)
+      File.open(@path, opts, &block)
     end
   end
 

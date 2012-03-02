@@ -24,7 +24,7 @@ describe Transactional do
     context "when the transaction is sucessful" do
       it "creates a new file" do
         start_transaction do |filesystem, transaction|
-          filesystem.write_file testfile_rpath
+          filesystem.open testfile_rpath
           File.exists?(testfile_path).should be_true
         end
         File.exists?(testfile_path).should be_true
@@ -34,7 +34,7 @@ describe Transactional do
       it "overwrites an existing file" do
         File.open(testfile_path, "w") {|f| f.print "hello world"}
         start_transaction do |filesystem, transaction|
-          filesystem.write_file(testfile_rpath) do |f|
+          filesystem.open(testfile_rpath) do |f|
             f.print "goodbye world"
           end
         end
@@ -45,7 +45,7 @@ describe Transactional do
     context "when the transaction fails" do
       it "it deletes a newly created file" do
         start_transaction do |filesystem, transaction|
-          filesystem.write_file testfile_rpath
+          filesystem.open testfile_rpath
 
           File.exists?(testfile_path).should be_true
           File.read(testfile_path).should == ""
@@ -58,7 +58,7 @@ describe Transactional do
       it "rolls and existing file back to its original data" do
         File.open(testfile_path, "w") {|f| f.print "hello world"}
         start_transaction do |filesystem, transaction|
-          filesystem.write_file(testfile_rpath) do |f|
+          filesystem.open(testfile_rpath) do |f|
             f.print "goodbye world"
           end
           transaction.rollback
@@ -102,12 +102,12 @@ describe Transactional do
     end
 
     it "writes a file" do
-      @filesystem.write_file testfile_rpath
+      @filesystem.open testfile_rpath
       File.exists?(testfile_path).should be_true
     end
 
     it "rolls back a file" do
-      @filesystem.write_file testfile_rpath
+      @filesystem.open testfile_rpath
       @filesystem.rollback
       File.exists?(testfile_path).should be_false
     end
@@ -119,6 +119,18 @@ describe Transactional do
     it "writes data to a file" do
       file.open {|f| f.print "data"}
       File.read(testfile_path).should == "data"
+    end
+
+    describe ".open" do
+      it "delegates to File.open" do
+        opts = {mode: "", external_encoding: "utf-8"}
+        File.should_receive(:open).with(testfile_path, opts)
+        file.open(opts)
+      end
+
+      it "returns a file handle when no block is given" do
+        file.open.class.should == File
+      end
     end
 
     context "when the file does not previously exist" do
@@ -137,6 +149,15 @@ describe Transactional do
     context "when the file previously exists" do
       before do
         File.open(testfile_path, "w") {|f| f.print "original data"}
+      end
+
+      it "appends data to the file" do
+        file.open("a") {|f| f.print " + more data"}
+        File.read(testfile_path).should == "original data + more data"
+      end
+
+      it "reads the file" do
+        file.open("r") {|f| f.gets.should == "original data"}
       end
 
       it "reverts to the original content of the file when rolled back" do
