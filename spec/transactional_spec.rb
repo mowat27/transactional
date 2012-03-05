@@ -5,6 +5,7 @@ describe Transactional do
   let(:testfile_rpath)  { "testfile" }
   let(:testfile_path)   { File.join(filesystem_root, testfile_rpath) }
   let(:testfile)        { TestFile.new(testfile_path) }
+  let(:lockfile)        { TestFile.new("#{testfile_path}.lock") }
 
   def start_transaction
     Transactional::start_transaction do |transaction|
@@ -66,16 +67,28 @@ describe Transactional do
       end
 
       context "when the transaction is rolled back" do
-        it "it deletes a newly created file" do
-          start_transaction do |filesystem, transaction|
-            filesystem.open testfile_rpath
+        context "and the file was created inside the transaction" do
+          it "it deletes the file" do
+            start_transaction do |filesystem, transaction|
+              filesystem.open testfile_rpath
 
-            testfile.should be_present
-            testfile.should be_empty
-            transaction.rollback
+              testfile.should be_present
+              testfile.should be_empty
+              transaction.rollback
+              testfile.should_not be_present
+            end
             testfile.should_not be_present
           end
-          testfile.should_not be_present
+
+          it "deletes the lock file" do
+            start_transaction do |filesystem, transaction|
+              filesystem.open testfile_rpath do |f|
+                lockfile.should be_present
+                transaction.rollback
+              end
+            end
+            lockfile.should_not be_present
+          end
         end
 
         it "rolls and existing file back to its original data" do
@@ -191,6 +204,22 @@ describe Transactional do
         tfile.open {|f| f.puts "data"}
         tfile.rollback
         testfile.should_not be_present
+      end
+
+      it "deletes lockfile when rolled back" do
+        tfile.open do |f|
+          f.puts "data"
+        end
+        tfile.rollback
+        lockfile.should_not be_present
+      end
+
+      it "deletes the lockfile when rolled back inside the file write" do
+        tfile.open do |f|
+          f.puts "data"
+          tfile.rollback
+        end
+        lockfile.should_not be_present
       end
 
       it "does nothing on rollback when no updates have been made" do

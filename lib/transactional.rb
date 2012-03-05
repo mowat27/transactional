@@ -52,7 +52,7 @@ module Transactional
       raise AccessError.new("#{@path} is already open") if File.exists?(lockfile)
       create_lockfile
       result = File.open(@path, opts, &block)
-      FileUtils.rm(lockfile)
+      FileUtils.rm(lockfile) if File.exists? lockfile
       result
     end
 
@@ -73,6 +73,7 @@ module Transactional
   class NewTFile < TFile
     def rollback
       FileUtils.rm @path if File.exists? @path
+      FileUtils.rm lockfile if File.exists? lockfile
     end
   end
 
