@@ -3,4 +3,4 @@ lib_dir = File.join(SPEC_HOME, "..", "lib")
 $: << lib_dir
 
 require 'fileutils'
-require 'transactions'
+require 'transactional'
