@@ -11,6 +11,7 @@ describe Transactional do
     Transactional::start_transaction do |transaction|
       filesystem = transaction.create_file_system(filesystem_root)
       yield filesystem, transaction
+      transaction.commit
     end
   end
 
@@ -41,6 +42,10 @@ describe Transactional do
       FileUtils.rm_rf filesystem_root
     end
     FileUtils.mkdir filesystem_root
+  end
+
+  after do
+    lockfile.should_not be_present
   end
 
   describe "Integration Tests" do
@@ -145,38 +150,43 @@ describe Transactional do
     end
 
     context "with a single filesystem" do
-      it "rolls back the filesystem" do
-        fs = transaction.create_file_system(filesystem_root)
-        fs.should_receive(:rollback)
-        transaction.rollback
+      let(:filesystem) { transaction.create_file_system(filesystem_root) }
+
+      [:commit, :rollback].each do |operation|
+        it "#{operation}s the filesystem on #{operation}" do
+          filesystem.should_receive(operation)
+          transaction.send operation
+        end
       end
     end
 
     context "with many filesystems" do
-      it "rolls back all filesystems" do
-        fs1 = transaction.create_file_system(filesystem_root)
-        fs2 = transaction.create_file_system(filesystem_root)
-        fs1.should_receive(:rollback)
-        fs2.should_receive(:rollback)
-        transaction.rollback
+      let(:fs1) { transaction.create_file_system(filesystem_root) }
+      let(:fs2) { transaction.create_file_system(filesystem_root) }
+
+      [:commit, :rollback].each do |operation|
+        it "#{operation}s all filesystems on #{operation}" do
+          fs1.should_receive(operation)
+          fs2.should_receive(operation)
+          transaction.send operation
+        end
       end
     end
   end
 
   describe Transactional::FileSystem do
-    let(:transaction) {mock("a transaction")}
-    before do
-      @filesystem = Transactional::FileSystem.new(transaction, filesystem_root)
-    end
+    let(:transaction) { mock("a transaction") }
+    let(:filesystem)  { Transactional::FileSystem.new(transaction, filesystem_root) }
 
-    it "writes a file" do
-      @filesystem.open testfile_rpath
+    it "writes a file on commit" do
+      filesystem.open testfile_rpath
+      filesystem.commit
       testfile.should be_present
     end
 
     it "rolls back a file" do
-      @filesystem.open testfile_rpath
-      @filesystem.rollback
+      filesystem.open testfile_rpath
+      filesystem.rollback
       testfile.should_not be_present
     end
 
@@ -184,22 +194,22 @@ describe Transactional do
       it "rolls back its parent transaction" do
         File.any_instance.stub(:open).and_raise(Exception.new("something went wrong"))
         transaction.should_receive(:rollback)
-        @filesystem.open(testfile_rpath) do |f|
+        filesystem.open(testfile_rpath) do |f|
           f.open
         end
+        filesystem.commit
       end
     end
   end
 
   describe Transactional::TFile do
-    let(:tfile) {Transactional::TFile.load(filesystem_root, testfile_rpath)}
-
-    it "writes data to a file" do
-      tfile.open {|f| f.print "data"}
-      testfile.data.should == "data"
-    end
+    let(:tfile) { Transactional::TFile.load(filesystem_root, testfile_rpath) }
 
     describe ".open" do
+      after do
+        tfile.commit
+      end
+
       it "delegates to File.open" do
         opts = {mode: "", external_encoding: "utf-8"}
         File.stub(:open)
@@ -211,44 +221,85 @@ describe Transactional do
       it "returns a file handle when no block is given" do
         tfile.open.class.should == File
       end
+
+      it "raises an error when the file is already open" do
+        tfile.open do |f1|
+          expect {
+            tfile2 = Transactional::TFile.load(filesystem_root, testfile_rpath)
+            tfile2.open
+          }.to raise_error(Transactional::AccessError, /#{testfile_path} is already open/)
+        end
+      end
     end
 
     context "when the file does not previously exist" do
-      it "deletes updates when rolled back" do
-        tfile.open {|f| f.puts "data"}
-        tfile.rollback
-        testfile.should_not be_present
-      end
-
-      it "deletes lockfile when rolled back" do
-        tfile.open do |f|
-          f.puts "data"
-        end
-        tfile.rollback
-        lockfile.should_not be_present
-      end
-
-      it "deletes the lockfile when rolled back inside the file write" do
-        tfile.open do |f|
-          f.puts "data"
-          tfile.rollback
-        end
-        lockfile.should_not be_present
-      end
-
-      it "does nothing on rollback when no updates have been made" do
-        tfile.rollback
-        testfile.should_not be_present
-      end
-
-      describe '.open' do
-        it "raises an error when the file is already open" do
-          tfile.open do |f1|
-            expect {
-              tfile2 = Transactional::TFile.load(filesystem_root, testfile_rpath)
-              tfile2.open
-            }.to raise_error(Transactional::AccessError, /#{testfile_path} is already open/)
+      context "on commit" do
+        context "after file write" do
+          before do
+            tfile.open {|f| f.puts "data"}
+            tfile.commit
           end
+          it "creates a data file" do
+            testfile.should be_present
+          end
+          it "deletes the lock file" do
+            lockfile.should_not be_present
+          end
+        end
+
+        context "during file write" do
+          before do
+            tfile.open do |f|
+              f.puts "data"
+              tfile.commit
+            end
+          end
+          it "creates a data file" do
+            testfile.should be_present
+          end
+          it "deletes the lock file" do
+            lockfile.should_not be_present
+          end
+        end
+      end
+
+      context "on rollback" do
+        context "when no changes were made" do
+          before {tfile.rollback}
+          it "does not create a data file" do
+            testfile.should_not be_present
+          end
+          it "does not create a lockfile" do
+            lockfile.should_not be_present
+          end
+        end
+
+        context "after file write" do
+          before do
+            tfile.open {|f| f.puts "data"}
+            tfile.rollback
+          end
+          it "deletes the file" do
+            testfile.should_not be_present
+          end
+          it "deletes the lockfile" do
+            lockfile.should_not be_present
+          end
+        end
+      end
+
+      context "during file write" do
+        before do
+          tfile.open do |f|
+            f.puts "data"
+            tfile.rollback
+          end
+        end
+        it "deletes the file" do
+          testfile.should_not be_present
+        end
+        it "deletes the lockfile" do
+          lockfile.should_not be_present
         end
       end
     end
@@ -260,27 +311,38 @@ describe Transactional do
 
       it "appends data to the file" do
         tfile.open("a") {|f| f.print " + more data"}
+        tfile.commit
         testfile.data.should == "original data + more data"
       end
 
       it "reads the file" do
         tfile.open("r") {|f| f.gets.should == "original data"}
+        tfile.commit
       end
 
-      it "reverts to the original content of the file when rolled back" do
-        tfile.open {|f| f.puts "new data"}
-        tfile.rollback
-        testfile.data.should == "original data"
+      context "on commit" do
+        before do
+          tfile.open {|f| f.print "new data"}
+          tfile.commit
+        end
+        it "preserves to the changes made" do
+          testfile.data.should == "new data"
+        end
+        it "deletes the lock file" do
+          lockfile.should_not be_present
+        end
       end
 
-      describe '.open' do
-        it "raises an error when the file is already open" do
-          tfile.open do |f1|
-            expect {
-              tfile2 = Transactional::TFile.load(filesystem_root, testfile_rpath)
-              tfile2.open
-            }.to raise_error(Transactional::AccessError, /#{testfile_path} is already open/)
-          end
+      context "on rollback" do
+        before do
+          tfile.open {|f| f.print "new data"}
+          tfile.rollback
+        end
+        it "reverts to the original content" do
+          testfile.data.should == "original data"
+        end
+        it "deletes the lock file" do
+          lockfile.should_not be_present
         end
       end
     end

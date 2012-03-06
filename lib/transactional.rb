@@ -2,6 +2,7 @@ module Transactional
   def self.start_transaction
     transaction = Transaction.new
     yield transaction
+    transaction.commit
   end
 
   class Transaction
@@ -11,6 +12,10 @@ module Transactional
 
     def rollback
       @filesystems.each {|filesystem| filesystem.rollback}
+    end
+
+    def commit
+      @filesystems.each {|filesystem| filesystem.commit}
     end
 
     def create_file_system(filesystem_root)
@@ -33,6 +38,10 @@ module Transactional
         @transaction.rollback
     end
 
+    def commit
+      @tfiles.each {|tfile| tfile.commit}
+    end
+
     def rollback
       @tfiles.each {|tfile| tfile.rollback}
     end
@@ -51,9 +60,11 @@ module Transactional
     def open(opts = {mode: "w"}, &block)
       raise AccessError.new("#{@path} is already open") if @lockfile.exists?
       @lockfile.create
-      result = File.open(@path, opts, &block)
+      File.open(@path, opts, &block)
+    end
+
+    def commit
       @lockfile.delete
-      result
     end
 
     private
@@ -65,19 +76,28 @@ module Transactional
 
   class LockFile
     def initialize(parent_path)
-      @path = "#{parent_path}.lock"
+      @parent_path = parent_path
+      @lock_path = "#{@parent_path}.lock"
     end
 
     def create
-      File.open(@path, "w") {}
+      if File.exists? @parent_path
+        FileUtils.cp @parent_path, @lock_path
+      else
+        File.open(@lock_path, "w") {}
+      end
     end
 
     def delete
-      FileUtils.rm(@path) if File.exists? @path
+      FileUtils.rm(@lock_path) if File.exists? @lock_path
     end
 
     def exists?
-      File.exists?(@path)
+      File.exists?(@lock_path)
+    end
+
+    def restore
+      FileUtils.mv @lock_path, @parent_path
     end
   end
 
@@ -95,7 +115,7 @@ module Transactional
     end
 
     def rollback
-      File.open(@path, "w") {|f| f.print @original_data}
+      @lockfile.restore
     end
   end
 
