@@ -109,11 +109,6 @@ module Transactional
   end
 
   class ExistingTFile < TFile
-    def initialize(path)
-      super
-      @original_data = File.read(@path)
-    end
-
     def rollback
       @lockfile.restore
     end
