@@ -74,6 +74,19 @@ module Transactional
     end
   end
 
+  class NewTFile < TFile
+    def rollback
+      FileUtils.rm @path if File.exists? @path
+      @lockfile.delete
+    end
+  end
+
+  class ExistingTFile < TFile
+    def rollback
+      @lockfile.restore
+    end
+  end
+
   class LockFile
     def initialize(parent_path)
       @parent_path = parent_path
@@ -98,19 +111,6 @@ module Transactional
 
     def restore
       FileUtils.mv @lock_path, @parent_path
-    end
-  end
-
-  class NewTFile < TFile
-    def rollback
-      FileUtils.rm @path if File.exists? @path
-      @lockfile.delete
-    end
-  end
-
-  class ExistingTFile < TFile
-    def rollback
-      @lockfile.restore
     end
   end
 
