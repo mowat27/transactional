@@ -91,15 +91,29 @@ describe Transactional do
           end
         end
 
-        it "rolls and existing file back to its original data" do
-          testfile.data = "hello world"
-          start_transaction do |filesystem, transaction|
-            filesystem.open(testfile_rpath) do |f|
-              f.print "goodbye world"
+        context "and the file existed before the transaction" do
+          it "rolls and existing file back to its original data" do
+            testfile.data = "hello world"
+            start_transaction do |filesystem, transaction|
+              filesystem.open(testfile_rpath) do |f|
+                f.print "goodbye world"
+              end
+              transaction.rollback
             end
-            transaction.rollback
+            testfile.data.should == "hello world"
           end
-          testfile.data.should == "hello world"
+
+          it "deletes the lock file" do
+            testfile.data = "hello world"
+            start_transaction do |filesystem, transaction|
+              filesystem.open(testfile_rpath) do |f|
+                f.print "goodbye world"
+                lockfile.should be_present
+                transaction.rollback
+              end
+            end
+            lockfile.should_not be_present
+          end
         end
       end
 
