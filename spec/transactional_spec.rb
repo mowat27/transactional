@@ -4,38 +4,8 @@ describe Transactional do
   let(:filesystem_root) { File.join(SPEC_HOME, "test_filesystem") }
   let(:testfile_rpath)  { "testfile" }
   let(:testfile_path)   { File.join(filesystem_root, testfile_rpath) }
-  let(:testfile)        { TestFile.new(testfile_path) }
-  let(:lockfile)        { TestFile.new("#{testfile_path}.lock") }
-
-  def start_transaction
-    Transactional::start_transaction do |transaction|
-      filesystem = transaction.create_file_system(filesystem_root)
-      yield filesystem, transaction
-      transaction.commit
-    end
-  end
-
-  class TestFile
-    def initialize(path)
-      @path = path
-    end
-
-    def empty?
-      File.read(@path) == ""
-    end
-
-    def present?
-      File.exists?(@path)
-    end
-
-    def data
-      File.read(@path)
-    end
-
-    def data=(content)
-      File.open(@path, "w") {|f| f.print content}
-    end
-  end
+  let(:testfile)        { Transactional::Test::TestFile.new(testfile_path) }
+  let(:lockfile)        { Transactional::Test::TestFile.new("#{testfile_path}.lock") }
 
   before do
     if File.directory? filesystem_root
@@ -141,35 +111,20 @@ describe Transactional do
   end
 
   describe Transactional::Transaction do
-    let(:filesystem1) { mock("filesystem") }
-    let(:filesystem2) { mock("filesystem 2") }
     let(:transaction) { Transactional::Transaction.new }
+    let(:filesystem1) { transaction.create_file_system(filesystem_root) }
+    let(:filesystem2) { transaction.create_file_system(filesystem_root) }
 
     before do
-      Transactional::FileSystem.stub(:new).and_return(filesystem1, filesystem2)
+      Transactional::FileSystem.stub(:new).
+        and_return(mock("filesystem 1"), mock("filesystem 2"))
     end
 
-    context "with a single filesystem" do
-      let(:filesystem) { transaction.create_file_system(filesystem_root) }
-
-      [:commit, :rollback].each do |operation|
-        it "#{operation}s the filesystem on #{operation}" do
-          filesystem.should_receive(operation)
-          transaction.send operation
-        end
-      end
-    end
-
-    context "with many filesystems" do
-      let(:fs1) { transaction.create_file_system(filesystem_root) }
-      let(:fs2) { transaction.create_file_system(filesystem_root) }
-
-      [:commit, :rollback].each do |operation|
-        it "#{operation}s all filesystems on #{operation}" do
-          fs1.should_receive(operation)
-          fs2.should_receive(operation)
-          transaction.send operation
-        end
+    [:commit, :rollback].each do |operation|
+      it "#{operation}s all filesystems on #{operation}" do
+        filesystem1.should_receive(operation)
+        filesystem2.should_receive(operation)
+        transaction.send operation
       end
     end
   end
@@ -203,6 +158,9 @@ describe Transactional do
   end
 
   describe Transactional::TFile do
+
+    extend Transactional::Test::TFileHelpers
+
     let(:tfile) { Transactional::TFile.load(filesystem_root, testfile_rpath) }
 
     describe ".open" do
@@ -211,15 +169,10 @@ describe Transactional do
       end
 
       it "delegates to File.open" do
-        opts = {mode: "", external_encoding: "utf-8"}
-        File.stub(:open)
-        FileUtils.stub(:rm)
+        opts = {mode: "w", external_encoding: "utf-8"}
+        Transactional::LockFile.any_instance.stub(:create)
         File.should_receive(:open).with(testfile_path, opts)
         tfile.open(opts)
-      end
-
-      it "returns a file handle when no block is given" do
-        tfile.open.class.should == File
       end
 
       it "raises an error when the file is already open" do
@@ -239,12 +192,8 @@ describe Transactional do
             tfile.open {|f| f.puts "data"}
             tfile.commit
           end
-          it "creates a data file" do
-            testfile.should be_present
-          end
-          it "deletes the lock file" do
-            lockfile.should_not be_present
-          end
+          it_creates_data_file
+          it_deletes_lockfile
         end
 
         context "during file write" do
@@ -254,24 +203,16 @@ describe Transactional do
               tfile.commit
             end
           end
-          it "creates a data file" do
-            testfile.should be_present
-          end
-          it "deletes the lock file" do
-            lockfile.should_not be_present
-          end
+          it_creates_data_file
+          it_deletes_lockfile
         end
       end
 
       context "on rollback" do
         context "when no changes were made" do
           before {tfile.rollback}
-          it "does not create a data file" do
-            testfile.should_not be_present
-          end
-          it "does not create a lockfile" do
-            lockfile.should_not be_present
-          end
+          it_creates_data_file(false)
+          it_deletes_lockfile
         end
 
         context "after file write" do
@@ -279,27 +220,19 @@ describe Transactional do
             tfile.open {|f| f.puts "data"}
             tfile.rollback
           end
-          it "deletes the file" do
-            testfile.should_not be_present
-          end
-          it "deletes the lockfile" do
-            lockfile.should_not be_present
-          end
+          it_creates_data_file(false)
+          it_deletes_lockfile
         end
-      end
 
-      context "during file write" do
-        before do
-          tfile.open do |f|
-            f.puts "data"
-            tfile.rollback
+        context "during file write" do
+          before do
+            tfile.open do |f|
+              f.puts "data"
+              tfile.rollback
+            end
           end
-        end
-        it "deletes the file" do
-          testfile.should_not be_present
-        end
-        it "deletes the lockfile" do
-          lockfile.should_not be_present
+          it_creates_data_file(false)
+          it_deletes_lockfile
         end
       end
     end
@@ -328,9 +261,7 @@ describe Transactional do
         it "preserves to the changes made" do
           testfile.data.should == "new data"
         end
-        it "deletes the lock file" do
-          lockfile.should_not be_present
-        end
+        it_deletes_lockfile
       end
 
       context "on rollback" do
@@ -341,9 +272,7 @@ describe Transactional do
         it "reverts to the original content" do
           testfile.data.should == "original data"
         end
-        it "deletes the lock file" do
-          lockfile.should_not be_present
-        end
+        it_deletes_lockfile
       end
     end
   end

@@ -60,7 +60,9 @@ module Transactional
     def open(opts = {mode: "w"}, &block)
       raise AccessError.new("#{@path} is already open") if @lockfile.exists?
       @lockfile.create
-      File.open(@path, opts, &block)
+      File.open(@path, opts) do |f|
+        yield f if block_given?
+      end
     end
 
     def commit
