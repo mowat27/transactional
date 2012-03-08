@@ -12,6 +12,17 @@ describe Transactional do
         end
         testdir.should be_present
       end
+
+      context "when the transaction fails" do
+        it "deletes the directory" do
+          pending "making a TDir rollback"
+          start_transaction do |filesystem, transaction|
+            filesystem.create_directory testdir_rpath
+            transaction.rollback
+          end
+          testdir.should_not be_present
+        end
+      end
     end
 
     describe "writing a file inside a transaction" do

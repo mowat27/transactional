@@ -7,5 +7,9 @@ module Transactional
     def create
       FileUtils.mkdir @path
     end
+
+    def rollback
+      FileUtils.rmdir @path
+    end
   end
 end
