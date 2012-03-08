@@ -98,17 +98,12 @@ describe Transactional do
       end
 
       context "when an error causes the transaction to fail" do
-        before do
-          File.stub(:open).and_raise(Exception.new("something went wrong"))
-        end
+        before { File.stub(:open).and_raise(Exception.new("something went wrong")) }
 
         it "rolls back the transaction" do
           start_transaction do |filesystem, transaction|
             transaction.should_receive(:rollback)
-
-            filesystem.open(testfile_rpath) do |f|
-              f.print "goodbye world"
-            end
+            filesystem.open(testfile_rpath) { |f| f.print "goodbye world" }
           end
         end
       end

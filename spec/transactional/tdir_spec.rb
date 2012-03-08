@@ -5,14 +5,22 @@ describe Transactional::TDir do
 
   before { create_empty_filesytem }
 
-  it "creates a directory" do
-    tdir.create
-    testdir.should be_present
+  context "when a directory is created" do
+    before { tdir.create }
+    it "creates a directory" do
+      testdir.should be_present
+    end
+
+    it "deletes the directory when rolled back" do
+      tdir.rollback
+      testdir.should_not be_present
+    end
   end
 
-  it "deletes the directory when rolled back" do
-    tdir.create
-    tdir.rollback
-    testdir.should_not be_present
+  context "when no directory is created" do
+    it "does nothing when rolled back" do
+      tdir.rollback
+      testdir.should_not be_present
+    end
   end
 end
