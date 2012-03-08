@@ -7,19 +7,35 @@ describe Transactional::FileSystem do
   let(:transaction) { mock("a transaction") }
   let(:filesystem)  { Transactional::FileSystem.new(transaction, filesystem_root) }
 
-  it "writes a file on commit" do
-    filesystem.open testfile_rpath
-    filesystem.commit
-    testfile.should be_present
+  context "on commit" do
+    it "writes files" do
+      filesystem.open testfile_rpath
+      filesystem.commit
+      testfile.should be_present
+    end
+
+    it "writes directories" do
+      filesystem.create_directory testdir_rpath
+      filesystem.commit
+      testdir.should be_present
+    end
   end
 
-  it "rolls back a file" do
-    filesystem.open testfile_rpath
-    filesystem.rollback
-    testfile.should_not be_present
+  context "on rollback" do
+    it "rolls back files" do
+      filesystem.open testfile_rpath
+      filesystem.rollback
+      testfile.should_not be_present
+    end
+
+    it "rolls back directories" do
+      filesystem.create_directory testdir_rpath
+      filesystem.rollback
+      testdir.should_not be_present
+    end
   end
 
-  context "when an error occurs on a file operation" do
+  context "when an error occurs during a filesystem operation" do
     it "rolls back its parent transaction" do
       File.any_instance.stub(:open).and_raise(Exception.new("something went wrong"))
       transaction.should_receive(:rollback)

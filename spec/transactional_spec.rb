@@ -15,7 +15,6 @@ describe Transactional do
 
       context "when the transaction fails" do
         it "deletes the directory" do
-          pending "making a TDir rollback"
           start_transaction do |filesystem, transaction|
             filesystem.create_directory testdir_rpath
             transaction.rollback

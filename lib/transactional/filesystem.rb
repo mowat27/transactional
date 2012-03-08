@@ -3,6 +3,7 @@ module Transactional
     def initialize(transaction, root)
       @root = root
       @tfiles = []
+      @tdirs = []
       @transaction = transaction
     end
 
@@ -14,7 +15,9 @@ module Transactional
     end
 
     def create_directory(rpath)
-      TDir.new(@root, rpath).create
+     tdir = TDir.new(@root, rpath)
+     tdir.create
+     @tdirs << tdir
     end
 
     def commit
@@ -22,6 +25,7 @@ module Transactional
     end
 
     def rollback
+      @tdirs.each  {|tdir|  tdir.rollback}
       @tfiles.each {|tfile| tfile.rollback}
     end
   end
