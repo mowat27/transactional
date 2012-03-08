@@ -5,11 +5,37 @@ $: << lib_dir
 require 'fileutils'
 require 'transactional'
 
+def filesystem_root
+  File.join(SPEC_HOME, "test_filesystem")
+end
+
+def testfile_rpath
+  "testfile"
+end
+
+def testfile_path
+  File.join(filesystem_root, testfile_rpath)
+end
+
+def testfile
+  Transactional::Test::TestFile.new(testfile_path)
+end
+
+def lockfile
+  Transactional::Test::TestFile.new("#{testfile_path}.lock")
+end
+
+def create_empty_filesytem
+  if File.directory? filesystem_root
+    FileUtils.rm_rf filesystem_root
+  end
+  FileUtils.mkdir filesystem_root
+end
+
 def start_transaction
-  Transactional::start_transaction do |transaction|
+  Transactional::Transaction.run do |transaction|
     filesystem = transaction.create_file_system(filesystem_root)
     yield filesystem, transaction
-    transaction.commit
   end
 end
 
