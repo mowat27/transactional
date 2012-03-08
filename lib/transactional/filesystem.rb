@@ -13,6 +13,10 @@ module Transactional
         @transaction.rollback
     end
 
+    def create_directory(rpath)
+      TDir.new(@root, rpath).create
+    end
+
     def commit
       @tfiles.each {|tfile| tfile.commit}
     end

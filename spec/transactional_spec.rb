@@ -5,6 +5,15 @@ describe Transactional do
   after  { lockfile.should_not be_present }
 
   describe "Integration Tests" do
+    describe "creating a directory inside a filesystem" do
+      it "creates a directory" do
+        start_transaction do |filesystem, transaction|
+          filesystem.create_directory testdir_rpath
+        end
+        testdir.should be_present
+      end
+    end
+
     describe "writing a file inside a transaction" do
       context "when the transaction is sucessful" do
         it "creates a new file" do

@@ -1,12 +1,12 @@
 require 'spec_helper'
 
 describe Transactional::TFile do
-  before { create_empty_filesytem }
-  after  { lockfile.should_not be_present }
-
   extend Transactional::Test::TFileHelpers
 
   let(:tfile) { Transactional::TFile.load(filesystem_root, testfile_rpath) }
+
+  before { create_empty_filesytem }
+  after  { lockfile.should_not be_present }
 
   describe ".open" do
     after do

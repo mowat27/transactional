@@ -9,16 +9,28 @@ def filesystem_root
   File.join(SPEC_HOME, "test_filesystem")
 end
 
+def testdir_rpath
+  'testdir'
+end
+
 def testfile_rpath
-  "testfile"
+  'testfile'
 end
 
 def testfile_path
   File.join(filesystem_root, testfile_rpath)
 end
 
+def testdir_path
+  File.join(filesystem_root, testdir_rpath)
+end
+
 def testfile
   Transactional::Test::TestFile.new(testfile_path)
+end
+
+def testdir
+  Transactional::Test::TestDir.new(testdir_path)
 end
 
 def lockfile
@@ -60,19 +72,31 @@ module Transactional::Test
     end
   end
 
-  class TestFile
-    attr_reader :path
-
+  module TestFileSystemObject
     def initialize(path)
       @path = path
     end
+  end
+
+  class TestDir
+    include TestFileSystemObject
+
+    def present?
+      File.directory?(@path)
+    end
+  end
+
+  class TestFile
+    include TestFileSystemObject
+
+    attr_reader :path
 
     def empty?
       File.read(@path) == ""
     end
 
     def present?
-      File.exists?(@path)
+      File.file?(@path)
     end
 
     def data
