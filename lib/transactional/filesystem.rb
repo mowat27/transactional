@@ -1,21 +1,21 @@
 module Transactional
-  class FileSystem
+  class FileSystem < TDir
     def initialize(transaction, root)
-      @root = root
+      @path = root
       @tfiles = []
       @tdirs = []
       @transaction = transaction
     end
 
     def open(rpath)
-      @tfiles << TFile.load(@root, rpath)
+      @tfiles << TFile.load(@path, rpath)
       @tfiles.last.open {|f| yield f if block_given?}
       rescue Exception => ex
         @transaction.rollback
     end
 
     def create_directory(rpath)
-     tdir = TDir.new(@root, rpath)
+     tdir = TDir.new(@path, rpath)
      tdir.create
      @tdirs << tdir
     end

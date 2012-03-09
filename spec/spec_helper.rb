@@ -37,10 +37,12 @@ def lockfile
   Transactional::Test::TestFile.new("#{testfile_path}.lock")
 end
 
-def create_empty_filesytem
-  if File.directory? filesystem_root
-    FileUtils.rm_rf filesystem_root
-  end
+def delete_test_filesystem
+  FileUtils.rm_rf filesystem_root
+end
+
+def reset_test_filesytem
+  delete_test_filesystem
   FileUtils.mkdir filesystem_root
 end
 
@@ -73,6 +75,7 @@ module Transactional::Test
   end
 
   module TestFileSystemObject
+    attr_reader :path
     def initialize(path)
       @path = path
     end
@@ -88,8 +91,6 @@ module Transactional::Test
 
   class TestFile
     include TestFileSystemObject
-
-    attr_reader :path
 
     def empty?
       File.read(@path) == ""

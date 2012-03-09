@@ -5,7 +5,7 @@ describe Transactional::TFile do
 
   let(:tfile) { Transactional::TFile.load(filesystem_root, testfile_rpath) }
 
-  before { create_empty_filesytem }
+  before { reset_test_filesytem }
   after  { lockfile.should_not be_present }
 
   describe ".open" do

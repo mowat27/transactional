@@ -1,10 +1,32 @@
 require 'spec_helper'
 
 describe Transactional do
-  before { create_empty_filesytem }
+  before { reset_test_filesytem }
   after  { lockfile.should_not be_present }
 
   describe "Integration Tests" do
+    context "with a hierarchy of files and directories" do
+      let(:testfile2) { Transactional::Test::TestFile.new(File.join(testdir_rpath, "testfile2")) }
+      it "roll the hierarchy back properly" do
+        # Structure
+        # ---------
+        # test_filesystem
+        #   - testfile
+        #   - testdir
+        #     - testfile2
+        start_transaction do |filesystem, transaction|
+          filesystem.create_directory testdir_rpath
+          filesystem.open(testfile2) { |f| f.print "some data" }
+          filesystem.open(testfile)  { |f| f.print "some data" }
+          transaction.rollback
+
+          testfile.should_not be_present
+          testfile2.should_not be_present
+          testdir.should_not be_present
+        end
+      end
+    end
+
     describe "creating a directory inside a filesystem" do
       it "creates a directory" do
         start_transaction do |filesystem, transaction|
